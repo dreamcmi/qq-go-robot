@@ -1,4 +1,5 @@
 package main
+
 /*状态码	原因
 0	正常
 1	错误的auth key
@@ -45,7 +46,7 @@ func getMiraiVersion() string {
 }
 
 //绑定session
-func getSessionKey() string{
+func getSessionKey() (string, string) {
 	//创建发送请求数据
 	auth := map[string]string{"authKey": "darrencheng"}
 	authJson, err := json.Marshal(auth)
@@ -61,7 +62,7 @@ func getSessionKey() string{
 	var code gjson.Result = gjson.Get(string(authBody), "code")
 	if code.Int() == 1 {
 		fmt.Println("错误的MIRAI API HTTP auth key")
-		return string(authBody)
+		return string(authBody),"null"
 	}
 	var session gjson.Result = gjson.Get(string(authBody), "session")
 
@@ -70,7 +71,7 @@ func getSessionKey() string{
 	verify := make(map[string]interface{})
 	verify["sessionKey"] = session.String()
 	verify["qq"] = qqNum
-	verifyJson,err := json.Marshal(verify)
+	verifyJson, err := json.Marshal(verify)
 	dropErr(err)
 
 	//开始验证
@@ -82,12 +83,41 @@ func getSessionKey() string{
 	//fmt.Println(string(verifyBody))
 
 	//对返回信息验证
-	var verifyReCode gjson.Result = gjson.Get(string(verifyBody),"code")
-	if verifyReCode.Int() != 0{
+	var verifyReCode gjson.Result = gjson.Get(string(verifyBody), "code")
+	if verifyReCode.Int() != 0 {
+		//fmt.Println(string(verifyBody))
+		return string(verifyBody), session.String()
+	}
+	var verifyReMsg gjson.Result = gjson.Get(string(verifyBody), "msg")
+	//fmt.Println(verifyReMsg)
+	return verifyReMsg.String(), session.String()
+}
+
+//释放session
+func releaseSessionKey(sessionKey string) string {
+	/**************************************************************************/
+	//创建验证的json
+	verify := make(map[string]interface{})
+	verify["sessionKey"] = sessionKey
+	verify["qq"] = qqNum
+	verifyJson, err := json.Marshal(verify)
+	dropErr(err)
+
+	//开始验证
+	verifyGet, err := http.Post(url+"/release", "application/json", bytes.NewBuffer(verifyJson))
+	defer verifyGet.Body.Close()
+	//读一下返回的body
+	verifyBody, err := ioutil.ReadAll(verifyGet.Body)
+	dropErr(err)
+	//fmt.Println(string(verifyBody))
+
+	//对返回信息验证
+	var verifyReCode gjson.Result = gjson.Get(string(verifyBody), "code")
+	if verifyReCode.Int() != 0 {
 		//fmt.Println(string(verifyBody))
 		return string(verifyBody)
 	}
-	var verifyReMsg gjson.Result = gjson.Get(string(verifyBody),"msg")
+	var verifyReMsg gjson.Result = gjson.Get(string(verifyBody), "msg")
 	//fmt.Println(verifyReMsg)
 	return verifyReMsg.String()
 }
@@ -96,7 +126,14 @@ func main() {
 	ver := getMiraiVersion()
 	fmt.Print("mirai_version is:")
 	fmt.Println(ver)
-	sessionMsg := getSessionKey()
+
+	sessionMsg, sessionKey := getSessionKey()
 	fmt.Print("getSessionKey:")
 	fmt.Println(sessionMsg)
+	fmt.Println("This seesionKey is")
+	fmt.Println(sessionKey)
+
+	releaseMsg := releaseSessionKey(sessionKey)
+	fmt.Println("releaseSessionKey")
+	fmt.Println(releaseMsg)
 }
